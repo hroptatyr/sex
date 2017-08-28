@@ -206,4 +206,74 @@ read_xquo(const char *line, size_t llen)
 	return q;
 }
 
+xord_t
+read_xord(const char *ln, size_t lz)
+{
+/* process one line */
+	const char *const ep = ln + lz;
+	char *on;
+	xord_t o;
+
+	if (UNLIKELY(!lz)) {
+		goto bork;
+	}
+
+	/* get timestamp */
+	o.t = strtotv(ln, &on);
+	if (*on++ != '\t') {
+		goto bork;
+	}
+
+	switch (*on) {
+	case 'B'/*UY*/:
+	case 'L'/*ONG*/:
+	case 'b'/*uy*/:
+	case 'l'/*ong*/:
+		o.o.sid = CLOB_SIDE_BID;
+		break;
+	case 'S'/*ELL|HORT*/:
+	case 's'/*ell|hort*/:
+		o.o.sid = CLOB_SIDE_ASK;
+		break;
+	default:
+		goto bork;
+	}
+	if (UNLIKELY((on = memchr(on, '\t', ep - on)) == NULL)) {
+		goto bork;
+	}
+	/* keep track of instrument */
+	o.ins = ++on;
+	o.inz = ep - on;
+
+	/* everything else is optional */
+	if ((on = memchr(on, '\t', ep - on)) == NULL) {
+		o.o.qty = qty0;
+		o.o.lmt = NANPX;
+		o.o.typ = CLOB_TYPE_MKT;
+		goto fin;
+	}
+	/* adapt instrument */
+	o.inz = on++ - o.ins;
+
+	/* read quantity */
+	o.o.qty.hid = 0.dd;
+	o.o.qty.dis = strtoqx(on, &on);
+	if (LIKELY(*on > ' ')) {
+		/* nope */
+		goto bork;
+	} else if (*on++ == '\t') {
+		o.o.lmt = strtopx(on, &on);
+		if (*on > ' ') {
+			goto bork;
+		}
+		o.o.typ = CLOB_TYPE_LMT;
+	} else {
+		o.o.typ = CLOB_TYPE_MKT;
+	}
+fin:
+	return o;
+bork:
+	return NOT_A_XORD;
+}
+
 /* xquo.c ends here */

@@ -38,6 +38,7 @@
 #define INCLUDED_xquo_h_
 #include <unistd.h>
 #include <clob/clob_val.h>
+#include <clob/clob.h>
 
 typedef long long unsigned int tv_t;
 #define NANTV	((tv_t)-1ULL)
@@ -68,9 +69,21 @@ typedef struct {
 #define NOT_A_XQUO	((xquo_t){SIDE_UNK})
 #define NOT_A_XQUO_P(x)	!((x).s)
 
+typedef struct {
+	tv_t t;
+	clob_ord_t o;
+
+	const char *ins;
+	size_t inz;
+} xord_t;
+
+#define NOT_A_XORD	((xord_t){NANTV})
+#define NOT_A_XORD_P(x)	((x).t == NANTV)
+
 
 extern tv_t strtotv(const char *ln, char **endptr);
 extern ssize_t tvtostr(char *restrict buf, size_t bsz, tv_t t);
 extern xquo_t read_xquo(const char *line, size_t llen);
+extern xord_t read_xord(const char *line, size_t llen);
 
 #endif	/* INCLUDED_xquo_h_ */
