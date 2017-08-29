@@ -70,6 +70,13 @@ isnand64(_Decimal64 x)
 #define NANPX		NAND64
 #define isnanpx		isnand64
 
+typedef struct {
+	px_t p;
+	qx_t q;
+	const char *ins;
+	const size_t inz;
+} tra_t;
+
 static const char *cont;
 static size_t conz;
 static hx_t conx;
@@ -95,17 +102,19 @@ serror(const char *fmt, ...)
 
 
 static void
-send_beef(tv_t m, qx_t q, px_t p)
+send_tra(tv_t m, tra_t t)
 {
 	char buf[256U];
 	size_t len = 0U;
 
 	len += tvtostr(buf + len, sizeof(buf) - len, m);
 	buf[len++] = '\t';
-	len += (memcpy(buf + len, "TRA\t", 4U), 4U);
-	len += qxtostr(buf + len, sizeof(buf) - len, q);
+	len += (memcpy(buf + len, t.ins, t.inz), t.inz);
 	buf[len++] = '\t';
-	len += qxtostr(buf + len, sizeof(buf) - len, p);
+	len += (memcpy(buf + len, "TRA\t", 4U), 4U);
+	len += qxtostr(buf + len, sizeof(buf) - len, t.q);
+	buf[len++] = '\t';
+	len += qxtostr(buf + len, sizeof(buf) - len, t.p);
 	buf[len++] = '\n';
 	fwrite(buf, 1, len, stdout);
 	return;
@@ -246,7 +255,11 @@ offline(FILE *qfp)
 			const ord_t o = oq[i].o;
 			book_pdo_t pd = book_pdo(b, o.sid, o.qty, o.lmt);
 			if (pd.base > 0.dd) {
-				send_beef(metr, pd.base, pd.term / pd.base);
+				tra_t t = {
+					pd.base, pd.term / pd.base,
+					oq[i].ins, oq[i].inz,
+				};
+				send_tra(metr, t);
 				/* mark executed */
 				oq[i].o.t = NATV;
 			}
