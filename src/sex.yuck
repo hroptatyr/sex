@@ -3,8 +3,8 @@ Usage: sex QUOTES < ORDERS
 Simulate executions of ORDERS using QUOTES.
 
   --pair=X              In output tag accounts as X.
-  --exe-delay=N         In offline mode assume we can execute
-                        in under N milliseconds (default: 60)
+  --exe-delay=N         Assume orders reach the exchange after N.
+                        Default: 0
   --commission=PX       Commissions per roundtrip.  These will be
                         accrued in a separate account.
                         The format is PXb[/PXt] or /PXt where PXb is

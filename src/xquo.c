@@ -72,7 +72,7 @@ strtotv(const char *ln, char **endptr)
 
 	/* time value up first */
 	with (long unsigned int s, x) {
-		if (UNLIKELY(!(s = strtoul(ln, &on, 10)) || on == NULL)) {
+		if (UNLIKELY((s = strtoul(ln, &on, 10), on) == NULL)) {
 			r = NATV;
 			goto out;
 		} else if (*on == '.') {
