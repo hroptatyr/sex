@@ -100,6 +100,12 @@ serror(const char *fmt, ...)
 	return;
 }
 
+static inline __attribute__((pure, const)) tv_t
+max_tv(tv_t t1, tv_t t2)
+{
+	return t1 >= t2 ? t1 : t2;
+}
+
 
 static void
 send_tra(tv_t m, tra_t t)
@@ -259,7 +265,7 @@ offline(FILE *qfp)
 					pd.base, pd.term / pd.base,
 					oq[i].ins, oq[i].inz,
 				};
-				send_tra(metr, t);
+				send_tra(max_tv(metr, o.t), t);
 				/* mark executed */
 				oq[i].o.t = NATV;
 			}
