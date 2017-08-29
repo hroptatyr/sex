@@ -188,27 +188,52 @@ retry:
 }
 
 
-#include <assert.h>
-static __attribute__((noinline)) int
+static void
+prnt_book(tv_t m, book_t b)
+{
+	book_iter_t bi = book_iter(b, BOOK_SIDE_BID);
+	book_iter_t ai = book_iter(b, BOOK_SIDE_ASK);
+	char buf[64U];
+	size_t len = tvtostr(buf, sizeof(buf), m);
+	buf[len++] = '\n';
+	fwrite(buf, 1, len, stdout);
+	for (bool bip = true, aip = true; bip || aip;) {
+		bip = book_iter_next(&bi);
+		aip = book_iter_next(&ai);
+
+		if (bip) {
+			printf("%f", (double)bi.p);
+		}
+		putchar('\t');
+		if (aip) {
+			printf("%f", (double)ai.p);
+		}
+		putchar('\n');
+	}
+	return;
+}
+
+static int
 offline(FILE *qfp)
 {
 	xord_t _oq[256U], *oq = _oq;
 	size_t ioq = 0U, noq = 0U, zoq = countof(_oq);
+	tv_t metr;
 	book_t b;
 
 	b = make_book();
 
 	/* we can't do nothing before the first quote, so read that one
 	 * as a reference and fast forward orders beyond that point */
-	for (xquo_t newq; !NOT_A_XQUO_P(newq = yield_quo(qfp));) {
+	for (xquo_t q; !NOT_A_XQUO_P(q = yield_quo(qfp)); metr = q.o.t) {
 	ord:
 		if (UNLIKELY(stdin == NULL)) {
 			/* order file is eof'd, skip fetching more */
 			goto exe;
 		}
-		for (xord_t newo;
-		     noq < zoq && !NOT_A_XORD_P(newo = yield_ord(stdin));
-		     oq[noq++] = newo);
+		for (xord_t o;
+		     noq < zoq && !NOT_A_XORD_P(o = yield_ord(stdin));
+		     oq[noq++] = o);
 		if (noq < zoq) {
 			/* out of orders, shut him up */
 			fclose(stdin);
@@ -217,11 +242,11 @@ offline(FILE *qfp)
 
 	exe:
 		/* go through order queue and try exec'ing @q */
-		for (size_t i = ioq; i < noq && oq[i].o.t < newq.o.t; i++) {
+		for (size_t i = ioq; i < noq && oq[i].o.t < q.o.t; i++) {
 			const ord_t o = oq[i].o;
 			book_pdo_t pd = book_pdo(b, o.sid, o.qty, o.lmt);
 			if (pd.base > 0.dd) {
-				send_beef(o.t, pd.base, pd.term / pd.base);
+				send_beef(metr, pd.base, pd.term / pd.base);
 				/* mark executed */
 				oq[i].o.t = NATV;
 			}
@@ -240,8 +265,8 @@ offline(FILE *qfp)
 		} else if (UNLIKELY(!noq)) {
 			/* fill up the queue some more and do more exec'ing */
 			goto ord;
-		} else if (oq[noq - 1U].o.t < newq.o.t) {
-			/* there could be more orders between Q and NEWQ
+		} else if (oq[noq - 1U].o.t < q.o.t) {
+			/* there could be more orders between then and Q
 			 * try exec'ing those as well */
 			if (UNLIKELY(noq >= ioq + zoq / 2U)) {
 				/* resize :( */
@@ -258,7 +283,7 @@ offline(FILE *qfp)
 		}
 
 		/* at last build up new book */
-		book_add(b, newq.o);
+		book_add(b, q.o);
 	}
 	free_book(b);
 	return 0;
