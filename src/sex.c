@@ -376,6 +376,10 @@ Error: invalid suffix to exe-dealy, must be `s', `ms', `us', `ns'");
 		}
 	}
 
+	if (argi->quantity_arg) {
+		_glob_qty = strtoqx(argi->quantity_arg, NULL);
+	}
+
 	if (UNLIKELY((qfp = fopen(*argi->args, "r")) == NULL)) {
 		serror("\
 Error: cannot open QUOTES file `%s'", *argi->args);
