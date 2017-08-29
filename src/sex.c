@@ -71,10 +71,8 @@ isnand64(_Decimal64 x)
 #define isnanpx		isnand64
 
 typedef struct {
-	px_t p;
 	qx_t q;
-	const char *ins;
-	const size_t inz;
+	px_t p;
 } tra_t;
 
 static const char *cont;
@@ -116,12 +114,12 @@ send_tra(tv_t m, tra_t t)
 
 	len += tvtostr(buf + len, sizeof(buf) - len, m);
 	buf[len++] = '\t';
-	len += (memcpy(buf + len, t.ins, t.inz), t.inz);
+	len += (memcpy(buf + len, cont, conz), conz);
 	buf[len++] = '\t';
-	len += (memcpy(buf + len, "TRA\t", 4U), 4U);
+	len += (memcpy(buf + len, "EXE\t", 4U), 4U);
 	len += qxtostr(buf + len, sizeof(buf) - len, t.q);
 	buf[len++] = '\t';
-	len += qxtostr(buf + len, sizeof(buf) - len, t.p);
+	len += pxtostr(buf + len, sizeof(buf) - len, t.p);
 	buf[len++] = '\n';
 	fwrite(buf, 1, len, stdout);
 	return;
@@ -240,7 +238,6 @@ offline(FILE *qfp)
 			if (pd.base > 0.dd) {
 				tra_t t = {
 					pd.base, pd.term / pd.base,
-					oq[i].ins, oq[i].inz,
 				};
 				send_tra(max_tv(metr, o.t), t);
 				/* mark executed */
@@ -377,6 +374,10 @@ Error: invalid suffix to exe-dealy, must be `s', `ms', `us', `ns'");
 			rc = 1;
 			goto out;
 		}
+	}
+
+	if (argi->quantity_arg) {
+		_glob_qty = strtoqx(argi->quantity_arg, NULL);
 	}
 
 	if (UNLIKELY((qfp = fopen(*argi->args, "r")) == NULL)) {
