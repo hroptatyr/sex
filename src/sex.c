@@ -82,6 +82,7 @@ static size_t conz;
 static hx_t conx;
 
 static qx_t _glob_qty = 1.dd;
+static tv_t _glob_age;
 
 
 static __attribute__((format(printf, 1, 2))) void
@@ -161,6 +162,7 @@ retry:
 	}
 	/* fill in quantity */
 	r.o.qty = r.o.qty ?: _glob_qty;
+	r.o.t += _glob_age;
 	return r;
 }
 
@@ -301,7 +303,83 @@ main(int argc, char *argv[])
 Error: QUOTES file is mandatory.");
 		rc = 1;
 		goto out;
-	} else if (UNLIKELY((qfp = fopen(*argi->args, "r")) == NULL)) {
+	}
+
+	if (argi->exe_delay_arg) {
+		char *on;
+
+		_glob_age = strtotv(argi->exe_delay_arg, &on);
+		if (UNLIKELY(_glob_age == NATV)) {
+			errno = 0, serror("\
+Error: cannot read exe-delay argument");
+			rc = 1;
+			goto out;
+		}
+		switch (*on++) {
+		secs:
+		case '\0':
+		case 'S':
+		case 's':
+			/* seconds but strtotv() gives us nanos already */
+			break;
+
+		case 'n':
+		case 'N':
+			switch (*on) {
+			case 's':
+			case 'S':
+				_glob_age /= NSECS;
+				break;
+			default:
+				goto invalid;
+			}
+			break;
+
+		case 'm':
+		case 'M':
+			switch (*on) {
+			case '\0':
+				/* they want minutes, oh oh */
+				_glob_age *= 60UL;
+				goto secs;
+			case 's':
+			case 'S':
+				/* milliseconds it is then */
+				_glob_age /= MSECS;
+				break;
+			default:
+				goto invalid;
+			}
+			break;
+
+		case 'h':
+		case 'H':
+			_glob_age *= 60U * 60U;
+			goto secs;
+
+		case 'u':
+		case 'U':
+			switch (*on) {
+			case 's':
+			case 'S':
+				on++;
+				_glob_age /= USECS;
+				break;
+			default:
+				goto invalid;
+			}
+			break;
+
+		default:
+		invalid:
+			errno = 0, serror("\
+Error: invalid suffix to exe-dealy, must be `s', `ms', `us', `ns'");
+			rc = 1;
+			goto out;
+		}
+	}
+
+	if (UNLIKELY((qfp = fopen(*argi->args, "r")) == NULL)) {
 		serror("\
 Error: cannot open QUOTES file `%s'", *argi->args);
 		rc = 1;
