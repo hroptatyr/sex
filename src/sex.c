@@ -203,31 +203,6 @@ retry:
 }
 
 
-static void
-prnt_book(tv_t m, book_t b)
-{
-	book_iter_t bi = book_iter(b, BOOK_SIDE_BID);
-	book_iter_t ai = book_iter(b, BOOK_SIDE_ASK);
-	char buf[64U];
-	size_t len = tvtostr(buf, sizeof(buf), m);
-	buf[len++] = '\n';
-	fwrite(buf, 1, len, stdout);
-	for (bool bip = true, aip = true; bip || aip;) {
-		bip = book_iter_next(&bi);
-		aip = book_iter_next(&ai);
-
-		if (bip) {
-			printf("%f", (double)bi.p);
-		}
-		putchar('\t');
-		if (aip) {
-			printf("%f", (double)ai.p);
-		}
-		putchar('\n');
-	}
-	return;
-}
-
 static int
 offline(FILE *qfp)
 {
