@@ -37,48 +37,48 @@
 #if !defined INCLUDED_xquo_h_
 #define INCLUDED_xquo_h_
 #include <unistd.h>
-#include <clob/clob_val.h>
-#include <clob/clob.h>
+#include <books/books.h>
 
-typedef long long unsigned int tv_t;
-#define NANTV	((tv_t)-1ULL)
+#define NATV	((tv_t)-1ULL)
 
 typedef struct {
-	enum {
-		SIDE_UNK,
-		SIDE_ASK,
-		SIDE_BID,
-		SIDE_CLR,
-		SIDE_DEL,
-		NSIDES
-	} s;
-	enum {
-		LVL_0,
-		LVL_1,
-		LVL_2,
-		LVL_3,
-	} f;
-	px_t p;
-	qx_t q;
-	tv_t t;
+	book_quo_t o;
 
 	const char *ins;
 	size_t inz;
 } xquo_t;
 
-#define NOT_A_XQUO	((xquo_t){SIDE_UNK})
-#define NOT_A_XQUO_P(x)	!((x).s)
+#define NOT_A_XQUO	((xquo_t){NOT_A_QUO})
+#define NOT_A_XQUO_P(x)	(NOT_A_QUO_P((x).o))
 
 typedef struct {
+	enum {
+		ORD_LMT,
+		ORD_MKT,
+	} typ;
+	book_side_t sid;
+	qx_t qty;
+	union {
+		/* limit price for limit orders */
+		px_t lmt;
+		/* max slippage for market orders */
+		px_t slp;
+	};
 	tv_t t;
-	clob_ord_t o;
+} ord_t;
+
+#define NOT_A_ORD	((ord_t){.sid = BOOK_SIDE_UNK})
+#define NOT_A_ORD_P(x)	((x).sid == BOOK_SIDE_UNK)
+
+typedef struct {
+	ord_t o;
 
 	const char *ins;
 	size_t inz;
 } xord_t;
 
-#define NOT_A_XORD	((xord_t){NANTV})
-#define NOT_A_XORD_P(x)	((x).t == NANTV)
+#define NOT_A_XORD	((xord_t){NOT_A_ORD})
+#define NOT_A_XORD_P(x)	(NOT_A_ORD_P((x).o))
 
 
 extern tv_t strtotv(const char *ln, char **endptr);

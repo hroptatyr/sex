@@ -73,17 +73,17 @@ strtotv(const char *ln, char **endptr)
 	/* time value up first */
 	with (long unsigned int s, x) {
 		if (UNLIKELY(!(s = strtoul(ln, &on, 10)) || on == NULL)) {
-			r = NANTV;
+			r = NATV;
 			goto out;
 		} else if (*on == '.') {
 			char *moron;
 
 			x = strtoul(++on, &moron, 10);
 			if (UNLIKELY(moron - on > 9U)) {
-				return NANTV;
+				return NATV;
 			} else if ((moron - on) % 3U) {
 				/* huh? */
-				return NANTV;
+				return NATV;
 			}
 			switch (moron - on) {
 			default:
@@ -144,7 +144,9 @@ read_xquo(const char *line, size_t llen)
 	xquo_t q;
 
 	/* get timestamp */
-	q.t = strtotv(line, NULL);
+	if (UNLIKELY((q.o.t = strtotv(line, NULL)) == NATV)) {
+		return NOT_A_XQUO;
+	}
 
 	/* get qty */
 	if (UNLIKELY((lp = memrchr(line, '\t', llen)) == NULL)) {
@@ -152,7 +154,7 @@ read_xquo(const char *line, size_t llen)
 		return NOT_A_XQUO;
 	}
 	llen = lp - line;
-	q.q = strtoqx(lp + 1U, NULL);
+	q.o.q = strtoqx(lp + 1U, NULL);
 
 	/* get prc */
 	if (UNLIKELY((lp = memrchr(line, '\t', llen)) == NULL)) {
@@ -160,10 +162,10 @@ read_xquo(const char *line, size_t llen)
 		return NOT_A_XQUO;
 	}
 	llen = lp - line;
-	q.p = strtopx(lp + 1U, &on);
+	q.o.p = strtopx(lp + 1U, &on);
 	if (UNLIKELY(on <= lp + 1U)) {
 		/* invalidate price */
-		q.p = NANPX;
+		q.o.p = NANPX;
 	}
 
 	/* get flavour, should be just before ON */
@@ -171,7 +173,7 @@ read_xquo(const char *line, size_t llen)
 		/* map 1, 2, 3 to LVL_{1,2,3}
 		 * everything else goes to LVL_0 */
 		f ^= '0';
-		q.f = (typeof(q.f))(f & -(f < 4U));
+		q.o.f = (typeof(q.o.f))(f & -(f < 4U));
 	}
 
 	/* rewind manually */
@@ -181,11 +183,11 @@ read_xquo(const char *line, size_t llen)
 		 * map C to CLR, D to DEL (and T for TRA to DEL)
 		 * everything else goes to SIDE_UNK */
 		s &= ~0x20U;
-		s &= (unsigned char)-(s ^ '@' < NSIDES || s == 'T');
+		s &= (unsigned char)-(s ^ '@' < NBOOK_SIDES || s == 'T');
 		s &= 0xfU;
-		q.s = (typeof(q.s))s;
+		q.o.s = (typeof(q.o.s))s;
 
-		if (UNLIKELY(!q.s)) {
+		if (UNLIKELY(!q.o.s)) {
 			/* cannot put entry to either side, just ignore */
 			return NOT_A_XQUO;
 		}
@@ -219,21 +221,22 @@ read_xord(const char *ln, size_t lz)
 	}
 
 	/* get timestamp */
-	o.t = strtotv(ln, &on);
-	if (*on++ != '\t') {
+	o.o.t = strtotv(ln, &on);
+	if (*on++ != '\t' || o.o.t == NATV) {
 		goto bork;
 	}
 
+	/* encode which book side we want PDO'd */
 	switch (*on) {
 	case 'B'/*UY*/:
 	case 'L'/*ONG*/:
 	case 'b'/*uy*/:
 	case 'l'/*ong*/:
-		o.o.sid = CLOB_SIDE_BID;
+		o.o.sid = BOOK_SIDE_ASK;
 		break;
 	case 'S'/*ELL|HORT*/:
 	case 's'/*ell|hort*/:
-		o.o.sid = CLOB_SIDE_ASK;
+		o.o.sid = BOOK_SIDE_BID;
 		break;
 	default:
 		goto bork;
@@ -247,17 +250,16 @@ read_xord(const char *ln, size_t lz)
 
 	/* everything else is optional */
 	if ((on = memchr(on, '\t', ep - on)) == NULL) {
-		o.o.qty = qty0;
+		o.o.qty = 0.dd;
 		o.o.lmt = NANPX;
-		o.o.typ = CLOB_TYPE_MKT;
+		o.o.typ = ORD_MKT;
 		goto fin;
 	}
 	/* adapt instrument */
 	o.inz = on++ - o.ins;
 
 	/* read quantity */
-	o.o.qty.hid = 0.dd;
-	o.o.qty.dis = strtoqx(on, &on);
+	o.o.qty = strtoqx(on, &on);
 	if (LIKELY(*on > ' ')) {
 		/* nope */
 		goto bork;
@@ -266,9 +268,10 @@ read_xord(const char *ln, size_t lz)
 		if (*on > ' ') {
 			goto bork;
 		}
-		o.o.typ = CLOB_TYPE_LMT;
+		o.o.typ = ORD_LMT;
 	} else {
-		o.o.typ = CLOB_TYPE_MKT;
+		o.o.lmt = NANPX;
+		o.o.typ = ORD_MKT;
 	}
 fin:
 	return o;
