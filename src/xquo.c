@@ -64,6 +64,23 @@
 #include "memrchr.c"
 
 
+static long unsigned int
+strtolu(const char *str, char **endptr)
+{
+	long unsigned int r = 0U;
+	size_t si;
+
+	for (si = 0U; (unsigned char)(str[si] ^ '0') < 10U; si++) {
+		r *= 10U;
+		r += (unsigned char)(str[si] ^ '0');
+	}
+	if (endptr) {
+		*endptr = (char*)str + si;
+	}
+	return r;
+}
+
+
 tv_t
 strtotv(const char *ln, char **endptr)
 {
@@ -72,13 +89,13 @@ strtotv(const char *ln, char **endptr)
 
 	/* time value up first */
 	with (long unsigned int s, x) {
-		if (UNLIKELY((s = strtoul(ln, &on, 10), on) == NULL)) {
+		if (UNLIKELY((s = strtolu(ln, &on), on) == NULL)) {
 			r = NATV;
 			goto out;
 		} else if (*on == '.') {
 			char *moron;
 
-			x = strtoul(++on, &moron, 10);
+			x = strtolu(++on, &moron);
 			if (UNLIKELY(moron - on > 9U)) {
 				return NATV;
 			} else if ((moron - on) % 3U) {
