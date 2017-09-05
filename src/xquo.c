@@ -157,45 +157,25 @@ xquo_t
 read_xquo(const char *line, size_t llen)
 {
 /* process one line */
-	char *lp, *on;
-	xquo_t q;
+	const char *const eol = line + llen;
+	char *on;
+	xquo_t q = {.r = {}};
 
 	/* get timestamp */
-	if (UNLIKELY((q.o.t = strtotv(line, NULL)) == NATV)) {
+	if (UNLIKELY((q.o.t = strtotv(line, &on)) == NATV)) {
+		return NOT_A_XQUO;
+	} else if (UNLIKELY(*on++ != '\t')) {
 		return NOT_A_XQUO;
 	}
-
-	/* get qty */
-	if (UNLIKELY((lp = memrchr(line, '\t', llen)) == NULL)) {
-		/* can't do without quantity */
+	/* get instrument */
+	q.ins = on;
+	if (UNLIKELY((on = memchr(q.ins, '\t', eol - q.ins)) == NULL)) {
 		return NOT_A_XQUO;
 	}
-	llen = lp - line;
-	q.o.q = strtoqx(lp + 1U, NULL);
+	q.inz = on++ - q.ins;
 
-	/* get prc */
-	if (UNLIKELY((lp = memrchr(line, '\t', llen)) == NULL)) {
-		/* can't do without price */
-		return NOT_A_XQUO;
-	}
-	llen = lp - line;
-	q.o.p = strtopx(lp + 1U, &on);
-	if (UNLIKELY(on <= lp + 1U)) {
-		/* invalidate price */
-		q.o.p = NANPX;
-	}
-
-	/* get flavour, should be just before ON */
-	with (unsigned char f = *(unsigned char*)--lp) {
-		/* map 1, 2, 3 to LVL_{1,2,3}
-		 * everything else goes to LVL_0 */
-		f ^= '0';
-		q.o.f = (typeof(q.o.f))(f & -(f < 4U));
-	}
-
-	/* rewind manually */
-	for (; lp > line && lp[-1] != '\t'; lp--);
-	with (unsigned char s = *(unsigned char*)lp) {
+	/* side and flavour */
+	with (unsigned char s = *on++) {
 		/* map A or a to ASK and B or b to BID
 		 * map C to CLR, D to DEL (and T for TRA to DEL)
 		 * everything else goes to SIDE_UNK */
@@ -209,19 +189,55 @@ read_xquo(const char *line, size_t llen)
 			return NOT_A_XQUO;
 		}
 	}
-
-	if (LIKELY(lp-- > line)) {
-		llen = lp - line;
-		if (LIKELY((q.ins = memrchr(line, '\t', llen)) != NULL)) {
-			q.ins++;
-		} else {
-			q.ins = line;
-		}
-		q.inz = lp - q.ins;
-	} else {
-		q.ins = line, q.inz = 0U;
+	/* get flavour, should be just before ON */
+	with (unsigned char f = *on++) {
+		/* map 1, 2, 3 to LVL_{1,2,3}
+		 * everything else goes to LVL_0 */
+		f ^= '0';
+		q.o.f = (typeof(q.o.f))(f & -(f < 4U));
 	}
 
+	if (UNLIKELY(*on++ != '\t')) {
+		return NOT_A_XQUO;
+	}
+
+	/* price and qty is optional now */
+	with (const char *p = on) {
+		q.o.p = strtopx(p, &on);
+		if (UNLIKELY(p >= on || *on != '\t')) {
+			q.o.p = NANPX;
+			puts(on);
+			if (UNLIKELY(*on != '\t')) {
+				if ((on = memchr(on, '\t', eol - on)) == NULL) {
+					return q;
+				}
+			}
+		}
+		on++;
+	}
+	/* get qty */
+	with (const char *p = on) {
+		q.o.q = strtoqx(p, &on);
+		if (UNLIKELY(p >= on)) {
+			q.o.q = NANPX;
+		}
+		on++;
+	}
+
+	if (q.o.s == BOOK_SIDE_CLR && q.o.f > BOOK_LVL_0) {
+		if (UNLIKELY(q.o.f != BOOK_LVL_1)) {
+			return NOT_A_XQUO;
+		}
+		/* we're on a c1 line */
+		q.r.f = q.o.f;
+		q.r.p = q.o.q;
+		q.r.s = BOOK_SIDE_ASK;
+		q.o.s = BOOK_SIDE_BID;
+
+		q.o.q = strtoqx(on, &on);
+		on += *on == '\t';
+		q.r.q = strtoqx(on, &on);
+	}
 	return q;
 }
 
