@@ -75,6 +75,15 @@ typedef struct {
 	px_t p;
 } tra_t;
 
+typedef struct {
+	qx_t q;
+	px_t p;
+	/* spread at the time */
+	px_t s;
+	/* quote age */
+	tv_t g;
+} exe_t;
+
 static const char *cont;
 static size_t conz;
 static hx_t conx;
@@ -105,7 +114,48 @@ max_tv(tv_t t1, tv_t t2)
 	return t1 >= t2 ? t1 : t2;
 }
 
+static inline __attribute__((pure, const)) exe_t
+tra2exe(tra_t t, book_side_t s)
+{
+	switch (s) {
+	case BOOK_SIDE_ASK:
+		return (exe_t){t.q, t.p};
+	case BOOK_SIDE_BID:
+		return (exe_t){-t.q, t.p};
+	default:
+		break;
+	}
+	return (exe_t){0.dd, NANPX};
+}
+
 
+static void
+send_exe(tv_t m, exe_t x)
+{
+	static const char vexe[] = "EXE\t";
+	static const char vrej[] = "REJ\t";
+	char buf[256U];
+	size_t len = 0U;
+
+	len += tvtostr(buf + len, sizeof(buf) - len, m);
+	buf[len++] = '\t';
+	len += (memcpy(buf + len, cont, conz), conz);
+	buf[len++] = '\t';
+	len += (memcpy(buf + len, isnanpx(x.p) ? vrej : vexe, 4U), 4U);
+	len += qxtostr(buf + len, sizeof(buf) - len, x.q);
+	buf[len++] = '\t';
+	len += pxtostr(buf + len, sizeof(buf) - len, x.p);
+	/* spread at the time */
+	buf[len++] = '\t';
+	len += pxtostr(buf + len, sizeof(buf) - len, x.s);
+	/* how long was quote standing */
+	buf[len++] = '\t';
+	len += tvtostr(buf + len, sizeof(buf) - len, x.g);
+	buf[len++] = '\n';
+	fwrite(buf, 1, len, stdout);
+	return;
+}
+
 static void
 send_tra(tv_t m, tra_t t)
 {
@@ -116,7 +166,7 @@ send_tra(tv_t m, tra_t t)
 	buf[len++] = '\t';
 	len += (memcpy(buf + len, cont, conz), conz);
 	buf[len++] = '\t';
-	len += (memcpy(buf + len, "EXE\t", 4U), 4U);
+	len += (memcpy(buf + len, "TRA\t", 4U), 4U);
 	len += qxtostr(buf + len, sizeof(buf) - len, t.q);
 	buf[len++] = '\t';
 	len += pxtostr(buf + len, sizeof(buf) - len, t.p);
@@ -235,14 +285,13 @@ offline(FILE *qfp)
 		for (size_t i = ioq; i < noq && oq[i].o.t < q.o.t; i++) {
 			const ord_t o = oq[i].o;
 			book_pdo_t pd = book_pdo(b, o.sid, o.qty, o.lmt);
-			if (pd.base > 0.dd) {
-				tra_t t = {
-					pd.base, pd.term / pd.base,
-				};
-				send_tra(max_tv(metr, o.t), t);
-				/* mark executed */
-				oq[i].o.t = NATV;
-			}
+			tra_t t = {
+				pd.base, pd.term / pd.base,
+			};
+			exe_t x = tra2exe(t, o.sid);
+			send_exe(max_tv(metr, o.t), x);
+			/* mark executed */
+			oq[i].o.t = NATV;
 		}
 		/* fast forward dead orders */
 		for (; ioq < noq && oq[ioq].o.t == NATV; ioq++);
