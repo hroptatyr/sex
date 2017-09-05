@@ -277,6 +277,9 @@ offline(FILE *qfp)
 
 		/* at last build up new book */
 		book_add(b, q.o);
+		if (q.r.s) {
+			book_add(b, q.o);
+		}
 	}
 	free_book(b);
 	return 0;
