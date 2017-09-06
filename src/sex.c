@@ -517,6 +517,27 @@ Error: invalid suffix to exe-dealy, must be `s', `ms', `us', `ns'");
 		}
 	}
 
+	if (argi->commission_arg) {
+		char *on = argi->commission_arg;
+
+		switch (*on) {
+		default:
+			_glob_com.base = strtopx(on, &on);
+
+			if (*on == '/') {
+		case '/':
+			_glob_com.term = strtopx(++on, &on);
+			if (*on == '/') {
+				errno = 0, serror("\
+Error: commission must be given as PXb[/PXt]");
+				rc = 1;
+				goto out;
+			}
+			}
+			break;
+		}
+	}
+
 	if (argi->quantity_arg) {
 		_glob_qty = strtoqx(argi->quantity_arg, NULL);
 	}
