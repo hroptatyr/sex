@@ -118,28 +118,25 @@ max_tv(tv_t t1, tv_t t2)
 	return t1 >= t2 ? t1 : t2;
 }
 
-static inline __attribute__((pure, const)) exe_t
-pdo2exe(book_pdo_t pd, book_side_t s, tv_t metr)
+static inline __attribute__((pure, const)) book_side_t
+contra(book_side_t s)
 {
-	exe_t r = {
-		.q = 0.dd,
-		.p = pd.term / pd.base,
-		.y = metr - pd.yngt,
-		.z = metr - pd.oldt,
-	};
+/* ASK to BID and BID to ASK */
+	return (book_side_t)(s ^ 0b11U);
+}
 
+static inline __attribute__((pure, const)) exe_t
+pdo2exe(book_pdo_t pd, book_side_t s)
+{
 	switch (s) {
 	case BOOK_SIDE_ASK:
-		r.q = pd.base;
-		break;
+		return (exe_t){pd.base, pd.term / pd.base};
 	case BOOK_SIDE_BID:
-		r.q = -pd.base;
-		break;
+		return (exe_t){-pd.base, pd.term / pd.base};
 	default:
-		r.p = NANPX;
 		break;
 	}
-	return r;
+	return (exe_t){0.dd, NANPX};
 }
 
 
@@ -285,8 +282,21 @@ offline(FILE *qfp)
 		/* go through order queue and try exec'ing @q */
 		for (size_t i = ioq; i < noq && oq[i].o.t < q.o.t; i++) {
 			const ord_t o = oq[i].o;
-			book_pdo_t pd = book_pdo(b, o.sid, o.qty, o.lmt);
-			exe_t x = pdo2exe(pd, o.sid, metr = max_tv(metr, o.t));
+			px_t topb = book_top(b, BOOK_SIDE_BID).p;
+			px_t topa = book_top(b, BOOK_SIDE_ASK).p;
+			book_pdo_t d = book_pdo(b, o.sid, o.qty, o.lmt);
+			book_pdo_t c = book_pdo(b, contra(o.sid), o.qty, o.lmt);
+			exe_t x = pdo2exe(d, o.sid);
+			exe_t y = pdo2exe(c, contra(o.sid));
+
+			/* calc spreads */
+			x.s = topa - topb;
+			x.e = x.q < 0.dd ? y.p - x.p : x.p - y.p;
+
+			/* calc age */
+			metr = max_tv(metr, o.t);
+			x.y = metr - d.yngt;
+			x.z = metr - d.oldt;
 
 			send_exe(metr, x);
 			/* mark executed */
