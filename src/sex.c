@@ -345,16 +345,16 @@ offline(FILE *qfp)
 	xord_t _oq[256U], *oq = _oq;
 	size_t ioq = 0U, noq = 0U, zoq = countof(_oq);
 	tv_t metr = 0U;
-	book_t b;
 	acc_t a = {
 		.base = 0.dd, .term = 0.dd, .comm = 0.dd, .effs = 0.dd,
 	};
+	book_t b;
 
 	b = make_book();
 
 	/* we can't do nothing before the first quote, so read that one
 	 * as a reference and fast forward orders beyond that point */
-	for (xquo_t q; !NOT_A_XQUO_P(q = yield_quo(qfp)); metr = q.o.t) {
+	for (xquo_t q; (q = yield_quo(qfp), true); metr = q.o.t) {
 	ord:
 		if (UNLIKELY(stdin == NULL)) {
 			/* order file is eof'd, skip fetching more */
@@ -370,6 +370,15 @@ offline(FILE *qfp)
 		}
 
 	exe:
+		if (NOT_A_XQUO_P(q) && a.base) {
+			/* inject a CANCEL order */
+			const ord_t o = {
+				ORD_MKT, BOOK_SIDE_CLR,
+				.qty = 0.dd, .lmt = NANPX, .t = metr
+			};
+			oq[noq++] = (xord_t){ao(o, a), cont, conz};
+			q.o.t = NATV;
+		}
 		/* go through order queue and try exec'ing @q */
 		for (size_t i = ioq; i < noq && oq[i].o.t < q.o.t; i++) {
 			const ord_t o = ao(oq[i].o, a);
@@ -405,6 +414,9 @@ offline(FILE *qfp)
 			/* allocate */
 			a = alloc(a, x, _glob_com);
 			send_acc(metr, a);
+		}
+		if (NOT_A_XQUO_P(q)) {
+			break;
 		}
 		/* fast forward dead orders */
 		for (; ioq < noq && oq[ioq].o.t == NATV; ioq++);
