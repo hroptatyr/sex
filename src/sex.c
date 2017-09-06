@@ -76,6 +76,7 @@ fabsd64(_Decimal64 x)
 #define isnanpx		isnand64
 
 #define fabspx		fabsd64
+#define fabsqx		fabsd64
 
 typedef struct {
 	qx_t q;
@@ -95,12 +96,27 @@ typedef struct {
 	tv_t z;
 } exe_t;
 
+typedef struct {
+	qx_t base;
+	qx_t term;
+	qx_t comm;
+	qx_t effs;
+	tv_t yngt;
+	tv_t oldt;
+} acc_t;
+
+typedef struct {
+	px_t base;
+	px_t term;
+} com_t;
+
 static const char *cont;
 static size_t conz;
 static hx_t conx;
 
 static qx_t _glob_qty = 1.dd;
 static tv_t _glob_age;
+static com_t _glob_com = {0.dd, 0.dd};
 
 
 static __attribute__((format(printf, 1, 2))) void
@@ -175,6 +191,34 @@ send_exe(tv_t m, exe_t x)
 	/* oldest touched */
 	buf[len++] = '\t';
 	len += tvtostr(buf + len, sizeof(buf) - len, x.z);
+	buf[len++] = '\n';
+	fwrite(buf, 1, len, stdout);
+	return;
+}
+
+static void
+send_acc(tv_t m, acc_t a)
+{
+	static const char verb[] = "ACC\t";
+	char buf[256U];
+	size_t len;
+
+	len = tvtostr(buf, sizeof(buf), m);
+	buf[len++] = '\t';
+	len += (memcpy(buf + len, cont, conz), conz);
+	buf[len++] = '\t';
+	len += (memcpy(buf + len, verb, strlenof(verb)), strlenof(verb));
+	len += qxtostr(buf + len, sizeof(buf) - len, a.base);
+	buf[len++] = '\t';
+	len += qxtostr(buf + len, sizeof(buf) - len, a.term);
+	buf[len++] = '\t';
+	len += qxtostr(buf + len, sizeof(buf) - len, a.comm);
+	buf[len++] = '\t';
+	len += qxtostr(buf + len, sizeof(buf) - len, a.effs);
+	buf[len++] = '\t';
+	len += tvtostr(buf + len, sizeof(buf) - len, a.yngt);
+	buf[len++] = '\t';
+	len += tvtostr(buf + len, sizeof(buf) - len, a.oldt);
 	buf[len++] = '\n';
 	fwrite(buf, 1, len, stdout);
 	return;
@@ -257,6 +301,23 @@ retry:
 	return r;
 }
 
+static acc_t
+alloc(acc_t a, exe_t x, com_t c)
+{
+/* allocate execution X to account A. */
+	if (LIKELY(!isnanpx(x.p))) {
+		/* calc accounts */
+		a.base += x.q;
+		a.term -= x.q * x.p;
+		a.comm -= fabsqx(x.q) * c.base;
+		a.comm -= fabsd64(x.q * x.p) * c.term;
+		a.effs -= x.q * x.e;
+		a.yngt += x.y;
+		a.oldt += x.z;
+	}
+	return a;
+}
+
 
 static int
 offline(FILE *qfp)
@@ -265,6 +326,9 @@ offline(FILE *qfp)
 	size_t ioq = 0U, noq = 0U, zoq = countof(_oq);
 	tv_t metr = 0U;
 	book_t b;
+	acc_t a = {
+		.base = 0.dd, .term = 0.dd, .comm = 0.dd, .effs = 0.dd,
+	};
 
 	b = make_book();
 
@@ -313,6 +377,10 @@ offline(FILE *qfp)
 			send_exe(metr, x);
 			/* mark executed */
 			oq[i].o.t = NATV;
+
+			/* allocate */
+			a = alloc(a, x, _glob_com);
+			send_acc(metr, a);
 		}
 		/* fast forward dead orders */
 		for (; ioq < noq && oq[ioq].o.t == NATV; ioq++);
