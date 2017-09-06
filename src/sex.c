@@ -80,8 +80,12 @@ typedef struct {
 	px_t p;
 	/* spread at the time */
 	px_t s;
-	/* quote age */
-	tv_t g;
+	/* effective spread */
+	px_t e;
+	/* youngest liquidity touched */
+	tv_t y;
+	/* oldest liquidity touched */
+	tv_t z;
 } exe_t;
 
 static const char *cont;
@@ -115,17 +119,27 @@ max_tv(tv_t t1, tv_t t2)
 }
 
 static inline __attribute__((pure, const)) exe_t
-tra2exe(tra_t t, book_side_t s)
+pdo2exe(book_pdo_t pd, book_side_t s, tv_t metr)
 {
+	exe_t r = {
+		.q = 0.dd,
+		.p = pd.term / pd.base,
+		.y = metr - pd.yngt,
+		.z = metr - pd.oldt,
+	};
+
 	switch (s) {
 	case BOOK_SIDE_ASK:
-		return (exe_t){t.q, t.p};
+		r.q = pd.base;
+		break;
 	case BOOK_SIDE_BID:
-		return (exe_t){-t.q, t.p};
+		r.q = -pd.base;
+		break;
 	default:
+		r.p = NANPX;
 		break;
 	}
-	return (exe_t){0.dd, NANPX};
+	return r;
 }
 
 
@@ -145,31 +159,18 @@ send_exe(tv_t m, exe_t x)
 	len += qxtostr(buf + len, sizeof(buf) - len, x.q);
 	buf[len++] = '\t';
 	len += pxtostr(buf + len, sizeof(buf) - len, x.p);
-	/* spread at the time */
+	/* top spread at the time */
 	buf[len++] = '\t';
 	len += pxtostr(buf + len, sizeof(buf) - len, x.s);
-	/* how long was quote standing */
+	/* eff spread at the time */
 	buf[len++] = '\t';
-	len += tvtostr(buf + len, sizeof(buf) - len, x.g);
-	buf[len++] = '\n';
-	fwrite(buf, 1, len, stdout);
-	return;
-}
-
-static void
-send_tra(tv_t m, tra_t t)
-{
-	char buf[256U];
-	size_t len = 0U;
-
-	len += tvtostr(buf + len, sizeof(buf) - len, m);
+	len += pxtostr(buf + len, sizeof(buf) - len, x.e);
+	/* youngest touched */
 	buf[len++] = '\t';
-	len += (memcpy(buf + len, cont, conz), conz);
+	len += tvtostr(buf + len, sizeof(buf) - len, x.y);
+	/* oldest touched */
 	buf[len++] = '\t';
-	len += (memcpy(buf + len, "TRA\t", 4U), 4U);
-	len += qxtostr(buf + len, sizeof(buf) - len, t.q);
-	buf[len++] = '\t';
-	len += pxtostr(buf + len, sizeof(buf) - len, t.p);
+	len += tvtostr(buf + len, sizeof(buf) - len, x.z);
 	buf[len++] = '\n';
 	fwrite(buf, 1, len, stdout);
 	return;
@@ -258,7 +259,7 @@ offline(FILE *qfp)
 {
 	xord_t _oq[256U], *oq = _oq;
 	size_t ioq = 0U, noq = 0U, zoq = countof(_oq);
-	tv_t metr;
+	tv_t metr = 0U;
 	book_t b;
 
 	b = make_book();
@@ -285,11 +286,9 @@ offline(FILE *qfp)
 		for (size_t i = ioq; i < noq && oq[i].o.t < q.o.t; i++) {
 			const ord_t o = oq[i].o;
 			book_pdo_t pd = book_pdo(b, o.sid, o.qty, o.lmt);
-			tra_t t = {
-				pd.base, pd.term / pd.base,
-			};
-			exe_t x = tra2exe(t, o.sid);
-			send_exe(max_tv(metr, o.t), x);
+			exe_t x = pdo2exe(pd, o.sid, metr = max_tv(metr, o.t));
+
+			send_exe(metr, x);
 			/* mark executed */
 			oq[i].o.t = NATV;
 		}
