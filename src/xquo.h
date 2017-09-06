@@ -43,6 +43,7 @@
 
 typedef struct {
 	book_quo_t o;
+	book_quo_t r;
 
 	const char *ins;
 	size_t inz;

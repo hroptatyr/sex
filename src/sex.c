@@ -55,6 +55,11 @@ isnand64(_Decimal64 x)
 {
 	return __builtin_isnand64(x);
 }
+static inline __attribute__((pure, const)) _Decimal64
+fabsd64(_Decimal64 x)
+{
+	return x >= 0 ? x : -x;
+}
 #endif	/* DFP754_H || HAVE_DFP_STDLIB_H || HAVE_DECIMAL_H */
 #include <books/books.h>
 #include "dfp754_d64.h"
@@ -70,10 +75,40 @@ isnand64(_Decimal64 x)
 #define NANPX		NAND64
 #define isnanpx		isnand64
 
+#define fabspx		fabsd64
+#define fabsqx		fabsd64
+
 typedef struct {
 	qx_t q;
 	px_t p;
 } tra_t;
+
+typedef struct {
+	qx_t q;
+	px_t p;
+	/* spread at the time */
+	px_t s;
+	/* effective spread */
+	px_t e;
+	/* youngest liquidity touched */
+	tv_t y;
+	/* oldest liquidity touched */
+	tv_t z;
+} exe_t;
+
+typedef struct {
+	qx_t base;
+	qx_t term;
+	qx_t comm;
+	qx_t effs;
+	tv_t yngt;
+	tv_t oldt;
+} acc_t;
+
+typedef struct {
+	px_t base;
+	px_t term;
+} com_t;
 
 static const char *cont;
 static size_t conz;
@@ -81,6 +116,7 @@ static hx_t conx;
 
 static qx_t _glob_qty = 1.dd;
 static tv_t _glob_age;
+static com_t _glob_com = {0.dd, 0.dd};
 
 
 static __attribute__((format(printf, 1, 2))) void
@@ -105,10 +141,47 @@ max_tv(tv_t t1, tv_t t2)
 	return t1 >= t2 ? t1 : t2;
 }
 
+static inline __attribute__((pure, const)) book_side_t
+contra(book_side_t s)
+{
+/* ASK to BID and BID to ASK */
+	return (book_side_t)(s ^ 0b11U);
+}
+
+static inline __attribute__((pure, const)) tra_t
+pdo2tra(book_pdo_t pd, book_side_t s)
+{
+	switch (s) {
+	case BOOK_SIDE_ASK:
+		return (tra_t){pd.base, pd.term / pd.base};
+	case BOOK_SIDE_BID:
+		return (tra_t){-pd.base, pd.term / pd.base};
+	default:
+		break;
+	}
+	return (tra_t){0.dd, NANPX};
+}
+
+static ord_t
+ao(ord_t o, acc_t a)
+{
+	switch (o.sid) {
+	case BOOK_SIDE_CLR:
+		o.sid = a.base < 0.dd ? BOOK_SIDE_ASK : BOOK_SIDE_BID;
+		o.qty = o.qty ?: fabsqx(a.base);
+		break;
+	default:
+		break;
+	}
+	return o;
+}
+
 
 static void
-send_tra(tv_t m, tra_t t)
+send_exe(tv_t m, exe_t x)
 {
+	static const char vexe[] = "EXE\t";
+	static const char vrej[] = "REJ\t";
 	char buf[256U];
 	size_t len = 0U;
 
@@ -116,10 +189,50 @@ send_tra(tv_t m, tra_t t)
 	buf[len++] = '\t';
 	len += (memcpy(buf + len, cont, conz), conz);
 	buf[len++] = '\t';
-	len += (memcpy(buf + len, "EXE\t", 4U), 4U);
-	len += qxtostr(buf + len, sizeof(buf) - len, t.q);
+	len += (memcpy(buf + len, isnanpx(x.p) ? vrej : vexe, 4U), 4U);
+	len += qxtostr(buf + len, sizeof(buf) - len, x.q);
 	buf[len++] = '\t';
-	len += pxtostr(buf + len, sizeof(buf) - len, t.p);
+	len += pxtostr(buf + len, sizeof(buf) - len, x.p);
+	/* top spread at the time */
+	buf[len++] = '\t';
+	len += pxtostr(buf + len, sizeof(buf) - len, x.s);
+	/* eff spread at the time */
+	buf[len++] = '\t';
+	len += pxtostr(buf + len, sizeof(buf) - len, x.e);
+	/* youngest touched */
+	buf[len++] = '\t';
+	len += tvtostr(buf + len, sizeof(buf) - len, x.y);
+	/* oldest touched */
+	buf[len++] = '\t';
+	len += tvtostr(buf + len, sizeof(buf) - len, x.z);
+	buf[len++] = '\n';
+	fwrite(buf, 1, len, stdout);
+	return;
+}
+
+static void
+send_acc(tv_t m, acc_t a)
+{
+	static const char verb[] = "ACC\t";
+	char buf[256U];
+	size_t len;
+
+	len = tvtostr(buf, sizeof(buf), m);
+	buf[len++] = '\t';
+	len += (memcpy(buf + len, cont, conz), conz);
+	buf[len++] = '\t';
+	len += (memcpy(buf + len, verb, strlenof(verb)), strlenof(verb));
+	len += qxtostr(buf + len, sizeof(buf) - len, a.base);
+	buf[len++] = '\t';
+	len += qxtostr(buf + len, sizeof(buf) - len, a.term);
+	buf[len++] = '\t';
+	len += qxtostr(buf + len, sizeof(buf) - len, a.comm);
+	buf[len++] = '\t';
+	len += qxtostr(buf + len, sizeof(buf) - len, a.effs);
+	buf[len++] = '\t';
+	len += tvtostr(buf + len, sizeof(buf) - len, a.yngt);
+	buf[len++] = '\t';
+	len += tvtostr(buf + len, sizeof(buf) - len, a.oldt);
 	buf[len++] = '\n';
 	fwrite(buf, 1, len, stdout);
 	return;
@@ -159,7 +272,13 @@ retry:
 		goto retry;
 	}
 	/* fill in quantity */
-	r.o.qty = r.o.qty ?: _glob_qty;
+	switch (r.o.sid) {
+	case BOOK_SIDE_BID:
+	case BOOK_SIDE_ASK:
+		r.o.qty = r.o.qty ?: _glob_qty;
+	default:
+		break;
+	}
 	r.o.t += _glob_age;
 	return r;
 }
@@ -202,14 +321,34 @@ retry:
 	return r;
 }
 
+static acc_t
+alloc(acc_t a, exe_t x, com_t c)
+{
+/* allocate execution X to account A. */
+	if (LIKELY(!isnanpx(x.p))) {
+		/* calc accounts */
+		a.base += x.q;
+		a.term -= x.q * x.p;
+		a.comm -= fabsqx(x.q) * c.base;
+		a.comm -= fabsd64(x.q * x.p) * c.term;
+		a.effs -= x.q * x.e;
+		a.yngt += x.y;
+		a.oldt += x.z;
+	}
+	return a;
+}
+
 
 static int
 offline(FILE *qfp)
 {
 	xord_t _oq[256U], *oq = _oq;
 	size_t ioq = 0U, noq = 0U, zoq = countof(_oq);
-	tv_t metr;
+	tv_t metr = 0U;
 	book_t b;
+	acc_t a = {
+		.base = 0.dd, .term = 0.dd, .comm = 0.dd, .effs = 0.dd,
+	};
 
 	b = make_book();
 
@@ -233,16 +372,39 @@ offline(FILE *qfp)
 	exe:
 		/* go through order queue and try exec'ing @q */
 		for (size_t i = ioq; i < noq && oq[i].o.t < q.o.t; i++) {
-			const ord_t o = oq[i].o;
-			book_pdo_t pd = book_pdo(b, o.sid, o.qty, o.lmt);
-			if (pd.base > 0.dd) {
-				tra_t t = {
-					pd.base, pd.term / pd.base,
-				};
-				send_tra(max_tv(metr, o.t), t);
+			const ord_t o = ao(oq[i].o, a);
+			px_t topb = book_top(b, BOOK_SIDE_BID).p;
+			px_t topa = book_top(b, BOOK_SIDE_ASK).p;
+			book_pdo_t d = book_pdo(b, o.sid, o.qty, o.lmt);
+			book_pdo_t c = book_pdo(b, contra(o.sid), o.qty, o.lmt);
+			tra_t trad = pdo2tra(d, o.sid);
+			tra_t trac = pdo2tra(c, contra(o.sid));
+			exe_t x;
+
+			/* copy prices */
+			x.p = trad.p;
+			x.q = trad.q;
+
+			/* calc spreads */
+			x.s = topa - topb;
+			x.e = fabspx(trac.p - trad.p);
+
+			/* calc age */
+			metr = max_tv(metr, o.t);
+			x.y = d.yngt > 0U ? metr - d.yngt : 0U;
+			x.z = d.oldt < NATV ? metr - d.oldt : 0U;
+
+			send_exe(metr, x);
+			if (o.qty - d.base <= 0.dd) {
 				/* mark executed */
 				oq[i].o.t = NATV;
+			} else if (oq[i].o.qty > 0.dd) {
+				oq[i].o.qty -= d.base;
 			}
+
+			/* allocate */
+			a = alloc(a, x, _glob_com);
+			send_acc(metr, a);
 		}
 		/* fast forward dead orders */
 		for (; ioq < noq && oq[ioq].o.t == NATV; ioq++);
@@ -277,6 +439,9 @@ offline(FILE *qfp)
 
 		/* at last build up new book */
 		book_add(b, q.o);
+		if (q.r.s) {
+			book_add(b, q.r);
+		}
 	}
 	free_book(b);
 	return 0;
@@ -373,6 +538,27 @@ Error: cannot read exe-delay argument");
 Error: invalid suffix to exe-dealy, must be `s', `ms', `us', `ns'");
 			rc = 1;
 			goto out;
+		}
+	}
+
+	if (argi->commission_arg) {
+		char *on = argi->commission_arg;
+
+		switch (*on) {
+		default:
+			_glob_com.base = strtopx(on, &on);
+
+			if (*on == '/') {
+		case '/':
+			_glob_com.term = strtopx(++on, &on);
+			if (*on == '/') {
+				errno = 0, serror("\
+Error: commission must be given as PXb[/PXt]");
+				rc = 1;
+				goto out;
+			}
+			}
+			break;
 		}
 	}
 
