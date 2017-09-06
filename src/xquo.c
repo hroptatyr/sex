@@ -230,6 +230,7 @@ read_xquo(const char *line, size_t llen)
 		}
 		/* we're on a c1 line */
 		q.r.f = q.o.f;
+		q.r.t = q.o.t;
 		q.r.p = q.o.q;
 		q.r.s = BOOK_SIDE_ASK;
 		q.o.s = BOOK_SIDE_BID;
