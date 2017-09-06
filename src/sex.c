@@ -55,6 +55,11 @@ isnand64(_Decimal64 x)
 {
 	return __builtin_isnand64(x);
 }
+static inline __attribute__((pure, const)) _Decimal64
+fabsd64(_Decimal64 x)
+{
+	return x >= 0 ? x : -x;
+}
 #endif	/* DFP754_H || HAVE_DFP_STDLIB_H || HAVE_DECIMAL_H */
 #include <books/books.h>
 #include "dfp754_d64.h"
@@ -69,6 +74,8 @@ isnand64(_Decimal64 x)
 
 #define NANPX		NAND64
 #define isnanpx		isnand64
+
+#define fabspx		fabsd64
 
 typedef struct {
 	qx_t q;
@@ -125,18 +132,18 @@ contra(book_side_t s)
 	return (book_side_t)(s ^ 0b11U);
 }
 
-static inline __attribute__((pure, const)) exe_t
-pdo2exe(book_pdo_t pd, book_side_t s)
+static inline __attribute__((pure, const)) tra_t
+pdo2tra(book_pdo_t pd, book_side_t s)
 {
 	switch (s) {
 	case BOOK_SIDE_ASK:
-		return (exe_t){pd.base, pd.term / pd.base};
+		return (tra_t){pd.base, pd.term / pd.base};
 	case BOOK_SIDE_BID:
-		return (exe_t){-pd.base, pd.term / pd.base};
+		return (tra_t){-pd.base, pd.term / pd.base};
 	default:
 		break;
 	}
-	return (exe_t){0.dd, NANPX};
+	return (tra_t){0.dd, NANPX};
 }
 
 
@@ -286,12 +293,17 @@ offline(FILE *qfp)
 			px_t topa = book_top(b, BOOK_SIDE_ASK).p;
 			book_pdo_t d = book_pdo(b, o.sid, o.qty, o.lmt);
 			book_pdo_t c = book_pdo(b, contra(o.sid), o.qty, o.lmt);
-			exe_t x = pdo2exe(d, o.sid);
-			exe_t y = pdo2exe(c, contra(o.sid));
+			tra_t trad = pdo2tra(d, o.sid);
+			tra_t trac = pdo2tra(c, contra(o.sid));
+			exe_t x;
+
+			/* copy prices */
+			x.p = trad.p;
+			x.q = trad.q;
 
 			/* calc spreads */
 			x.s = topa - topb;
-			x.e = x.q < 0.dd ? y.p - x.p : x.p - y.p;
+			x.e = fabspx(trac.p - trad.p);
 
 			/* calc age */
 			metr = max_tv(metr, o.t);
