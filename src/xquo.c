@@ -206,7 +206,6 @@ read_xquo(const char *line, size_t llen)
 		q.o.p = strtopx(p, &on);
 		if (UNLIKELY(p >= on || *on != '\t')) {
 			q.o.p = NANPX;
-			puts(on);
 			if (UNLIKELY(*on != '\t')) {
 				if ((on = memchr(on, '\t', eol - on)) == NULL) {
 					return q;
@@ -271,6 +270,10 @@ read_xord(const char *ln, size_t lz)
 	case 'S'/*ELL|HORT*/:
 	case 's'/*ell|hort*/:
 		o.o.sid = BOOK_SIDE_BID;
+		break;
+	case 'C'/*ANCEL*/:
+	case 'c'/*ancel*/:
+		o.o.sid = BOOK_SIDE_CLR;
 		break;
 	default:
 		goto bork;

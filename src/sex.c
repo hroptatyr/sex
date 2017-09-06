@@ -162,6 +162,20 @@ pdo2tra(book_pdo_t pd, book_side_t s)
 	return (tra_t){0.dd, NANPX};
 }
 
+static ord_t
+ao(ord_t o, acc_t a)
+{
+	switch (o.sid) {
+	case BOOK_SIDE_CLR:
+		o.sid = a.base < 0.dd ? BOOK_SIDE_ASK : BOOK_SIDE_BID;
+		o.qty = o.qty ?: fabsqx(a.base);
+		break;
+	default:
+		break;
+	}
+	return o;
+}
+
 
 static void
 send_exe(tv_t m, exe_t x)
@@ -258,7 +272,13 @@ retry:
 		goto retry;
 	}
 	/* fill in quantity */
-	r.o.qty = r.o.qty ?: _glob_qty;
+	switch (r.o.sid) {
+	case BOOK_SIDE_BID:
+	case BOOK_SIDE_ASK:
+		r.o.qty = r.o.qty ?: _glob_qty;
+	default:
+		break;
+	}
 	r.o.t += _glob_age;
 	return r;
 }
@@ -352,7 +372,7 @@ offline(FILE *qfp)
 	exe:
 		/* go through order queue and try exec'ing @q */
 		for (size_t i = ioq; i < noq && oq[i].o.t < q.o.t; i++) {
-			const ord_t o = oq[i].o;
+			const ord_t o = ao(oq[i].o, a);
 			px_t topb = book_top(b, BOOK_SIDE_BID).p;
 			px_t topa = book_top(b, BOOK_SIDE_ASK).p;
 			book_pdo_t d = book_pdo(b, o.sid, o.qty, o.lmt);
@@ -371,12 +391,16 @@ offline(FILE *qfp)
 
 			/* calc age */
 			metr = max_tv(metr, o.t);
-			x.y = metr - d.yngt;
-			x.z = metr - d.oldt;
+			x.y = d.yngt > 0U ? metr - d.yngt : 0U;
+			x.z = d.oldt < NATV ? metr - d.oldt : 0U;
 
 			send_exe(metr, x);
-			/* mark executed */
-			oq[i].o.t = NATV;
+			if (o.qty - d.base <= 0.dd) {
+				/* mark executed */
+				oq[i].o.t = NATV;
+			} else if (oq[i].o.qty > 0.dd) {
+				oq[i].o.qty -= d.base;
+			}
 
 			/* allocate */
 			a = alloc(a, x, _glob_com);
