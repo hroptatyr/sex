@@ -45,17 +45,22 @@
 #elif defined HAVE_DECIMAL_H
 # include <decimal.h>
 #endif	/* DFP754_H || HAVE_DFP_STDLIB_H || HAVE_DECIMAL_H */
+#if defined BOOKSD32
+#include "dfp754_d32.h"
+#endif
 #include "dfp754_d64.h"
 #include "xquo.h"
 #include "nifty.h"
 
+#if defined BOOKSD32
+#define strtopx		strtod32
+#define pxtostr		d32tostr
+#else
 #define strtopx		strtod64
 #define pxtostr		d64tostr
+#endif
 #define strtoqx		strtod64
 #define qxtostr		d64tostr
-
-#define NANPX		NAND64
-#define isnanpx		isnand64
 
 #define NSECS	(1000000000)
 #define USECS	(1000000)
@@ -228,7 +233,7 @@ read_xquo(const char *line, size_t llen)
 		/* we're on a c1 line */
 		q.r.f = q.o.f;
 		q.r.t = q.o.t;
-		q.r.p = q.o.q;
+		q.r.p = (px_t)q.o.q;
 		q.r.s = BOOK_SIDE_ASK;
 		q.o.s = BOOK_SIDE_BID;
 
