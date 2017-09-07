@@ -46,7 +46,6 @@
 #endif	/* DFP754_H || HAVE_DFP_STDLIB_H || HAVE_DECIMAL_H */
 #include "dfp754_d64.h"
 #include "xquo.h"
-#include "memrchr.h"
 #include "nifty.h"
 
 #define strtopx		strtod64
@@ -60,8 +59,6 @@
 #define NSECS	(1000000000)
 #define USECS	(1000000)
 #define MSECS	(1000)
-
-#include "memrchr.c"
 
 
 static long unsigned int
