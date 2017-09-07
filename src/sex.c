@@ -382,8 +382,8 @@ offline(FILE *qfp)
 		/* go through order queue and try exec'ing @q */
 		for (size_t i = ioq; i < noq && oq[i].o.t < q.o.t; i++) {
 			const ord_t o = ao(oq[i].o, a);
-			px_t topb = book_top(b, BOOK_SIDE_BID).p;
-			px_t topa = book_top(b, BOOK_SIDE_ASK).p;
+			book_quo_t topb = book_top(b, BOOK_SIDE_BID);
+			book_quo_t topa = book_top(b, BOOK_SIDE_ASK);
 			book_pdo_t d = book_pdo(b, o.sid, o.qty, o.lmt);
 			book_pdo_t c = book_pdo(b, contra(o.sid), o.qty, o.lmt);
 			tra_t trad = pdo2tra(d, o.sid);
@@ -395,7 +395,7 @@ offline(FILE *qfp)
 			x.q = trad.q;
 
 			/* calc spreads */
-			x.s = topa - topb;
+			x.s = topa.p - topb.p;
 			x.e = fabspx(trac.p - trad.p);
 
 			/* calc age */
