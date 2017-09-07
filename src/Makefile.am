@@ -32,8 +32,6 @@ bin_PROGRAMS += sex
 sex_SOURCES = sex.c sex.yuck
 sex_SOURCES += xquo.c xquo.h
 sex_SOURCES += hash.c hash.h
-EXTRA_sex_SOURCES =
-EXTRA_sex_SOURCES += memrchr.c memrchr.h
 sex_CPPFLAGS = $(AM_CPPFLAGS)
 sex_CPPFLAGS += $(books_CFLAGS)
 sex_CPPFLAGS += $(dfp754_CFLAGS)
@@ -41,7 +39,7 @@ sex_LDFLAGS = $(AM_LDFLAGS)
 sex_LDFLAGS += $(books_LIBS)
 sex_LDFLAGS += $(dfp754_LIBS)
 sex_LDADD = libdfp.a
-BUILT_SOURCES = sex.yucc
+BUILT_SOURCES += sex.yucc
 
 
 ## version rules
