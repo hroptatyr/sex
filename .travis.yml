@@ -1,0 +1,28 @@
+language: c
+sudo: true
+dist: trusty
+
+os:
+  - linux
+
+compiler:
+  - gcc
+
+install:
+  - sudo apt-get --yes install snapd
+  - sudo snap install --edge --devmode books
+
+before_script:
+  - autoreconf -vfi
+
+script:
+  - ./configure books_CFLAGS="-I/snap/books/current/include" books_LIBS="/snap/books/current/lib -lbooks" || { cat config.log; false; }
+  - make
+  - make check
+    || { cat test/test-suite.log; false; }
+  - make distcheck
+    || { cat sex-*/_build/test/test-suite.log; false; }
+
+notifications:
+  email:
+    - devel@fresse.org
