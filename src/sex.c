@@ -330,8 +330,8 @@ alloc(acc_t a, exe_t x, com_t c)
 		a.base += x.q;
 		a.term -= x.q * x.p;
 		a.comm -= fabsqx(x.q) * c.base;
-		a.comm -= fabsd64(x.q * x.p) * c.term;
-		a.effs -= x.q * x.e;
+		a.comm -= fabsqx(x.q * x.p) * c.term;
+		a.effs -= fabsqx(x.q) * x.e;
 		a.yngt += x.y;
 		a.oldt += x.z;
 	}
