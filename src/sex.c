@@ -330,8 +330,8 @@ alloc(acc_t a, exe_t x, com_t c)
 		a.base += x.q;
 		a.term -= x.q * x.p;
 		a.comm -= fabsqx(x.q) * c.base;
-		a.comm -= fabsd64(x.q * x.p) * c.term;
-		a.effs -= x.q * x.e;
+		a.comm -= fabsqx(x.q * x.p) * c.term;
+		a.effs -= fabsqx(x.q) * x.e;
 		a.yngt += x.y;
 		a.oldt += x.z;
 	}
@@ -382,10 +382,15 @@ offline(FILE *qfp)
 		/* go through order queue and try exec'ing @q */
 		for (size_t i = ioq; i < noq && oq[i].o.t < q.o.t; i++) {
 			const ord_t o = ao(oq[i].o, a);
+			book_pdo_t d = book_pdo(b, o.sid, o.qty, o.lmt);
+
+			if (UNLIKELY(d.base <= 0.dd)) {
+				continue;
+			}
+
+			book_pdo_t c = book_pdo(b, contra(o.sid), o.qty, NANPX);
 			book_quo_t topb = book_top(b, BOOK_SIDE_BID);
 			book_quo_t topa = book_top(b, BOOK_SIDE_ASK);
-			book_pdo_t d = book_pdo(b, o.sid, o.qty, o.lmt);
-			book_pdo_t c = book_pdo(b, contra(o.sid), o.qty, o.lmt);
 			tra_t trad = pdo2tra(d, o.sid);
 			tra_t trac = pdo2tra(c, contra(o.sid));
 			exe_t x;

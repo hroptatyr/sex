@@ -24,4 +24,9 @@ include clitoris.am
 AM_CLIT_LOG_FLAGS = -v --builddir $(top_builddir)/src
 TESTS_ENVIRONMENT = root=$(top_srcdir)
 
+cli_tests += sex_01.clit
+cli_tests += sex_02.clit
+cli_tests += sex_03.clit
+cli_tests += sex_04.clit
+
 ## Makefile.am ends here

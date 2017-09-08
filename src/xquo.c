@@ -282,7 +282,8 @@ read_xord(const char *ln, size_t lz)
 		goto bork;
 	}
 	if (UNLIKELY((on = memchr(on, '\t', ep - on)) == NULL)) {
-		goto bork;
+		o.ins = NULL, o.inz = 0U;
+		goto dflt;
 	}
 	/* keep track of instrument */
 	o.ins = ++on;
@@ -290,6 +291,7 @@ read_xord(const char *ln, size_t lz)
 
 	/* everything else is optional */
 	if ((on = memchr(on, '\t', ep - on)) == NULL) {
+	dflt:
 		o.o.qty = 0.dd;
 		o.o.lmt = NANPX;
 		o.o.typ = ORD_MKT;
