@@ -385,7 +385,7 @@ offline(FILE *qfp)
 			book_quo_t topb = book_top(b, BOOK_SIDE_BID);
 			book_quo_t topa = book_top(b, BOOK_SIDE_ASK);
 			book_pdo_t d = book_pdo(b, o.sid, o.qty, o.lmt);
-			book_pdo_t c = book_pdo(b, contra(o.sid), o.qty, o.lmt);
+			book_pdo_t c = book_pdo(b, contra(o.sid), o.qty, NANPX);
 			tra_t trad = pdo2tra(d, o.sid);
 			tra_t trac = pdo2tra(c, contra(o.sid));
 			exe_t x;
