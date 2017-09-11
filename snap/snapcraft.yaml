@@ -1,0 +1,25 @@
+name: sex-ga
+version: '0.1.0-GIT'
+summary: Simulating executions
+description: |
+    A tool that reads orders from stdin and executes them against quotes
+    from a file (or fifo).
+grade: devel # must be 'stable' to release into candidate/stable channels
+confinement: devmode # use 'strict' once you have the right plugs and slots
+
+apps:
+    sex:
+        command: bin/sex
+
+parts:
+    books:
+        plugin: autotools
+        source: https://github.com/hroptatyr/books.git
+
+    sex:
+        plugin: autotools
+        source: https://github.com/hroptatyr/sex.git
+        build-packages:
+            - pkg-config
+        after:
+            - books
