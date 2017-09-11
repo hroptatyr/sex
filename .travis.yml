@@ -16,7 +16,7 @@ before_script:
   - autoreconf -vfi
 
 script:
-  - ./configure books_CFLAGS="-I/snap/books/current/include" books_LIBS="/snap/books/current/lib -lbooks" || { cat config.log; false; }
+  - ./configure books_CFLAGS="-I/snap/books/current/include" books_LIBS="/snap/books/current/lib/libbooks.a" || { cat config.log; false; }
   - make
   - make check
     || { cat test/test-suite.log; false; }
