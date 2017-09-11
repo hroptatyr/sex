@@ -36,9 +36,9 @@ sex_CPPFLAGS = $(AM_CPPFLAGS)
 sex_CPPFLAGS += $(books_CFLAGS)
 sex_CPPFLAGS += $(dfp754_CFLAGS)
 sex_LDFLAGS = $(AM_LDFLAGS)
-sex_LDFLAGS += $(books_LIBS)
 sex_LDFLAGS += $(dfp754_LIBS)
 sex_LDADD = libdfp.a
+sex_LDADD += $(books_LIBS)
 BUILT_SOURCES += sex.yucc
 
 
