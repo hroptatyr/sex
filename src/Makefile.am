@@ -32,6 +32,7 @@ bin_PROGRAMS += sex
 sex_SOURCES = sex.c sex.yuck
 sex_SOURCES += xquo.c xquo.h
 sex_SOURCES += hash.c hash.h
+sex_SOURCES += nifty.h
 sex_CPPFLAGS = $(AM_CPPFLAGS)
 sex_CPPFLAGS += $(books_CFLAGS)
 sex_CPPFLAGS += $(dfp754_CFLAGS)
