@@ -31,4 +31,11 @@ cli_tests += sex_04.clit
 
 EXTRA_DIST += EURUSD.c1
 
+cli_tests += sex_05.clit
+cli_tests += sex_06.clit
+cli_tests += sex_07.clit
+cli_tests += sex_08.clit
+
+EXTRA_DIST += EURUSD.l1
+
 ## Makefile.am ends here
