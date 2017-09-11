@@ -20,7 +20,7 @@ script:
   - make
   - make check
     || { cat test/test-suite.log; false; }
-  - make distcheck
+  - make distcheck DISTCHECK_CONFIGURE_FLAGS='books_CFLAGS="-I/snap/books/current/include" books_LIBS="/snap/books/current/lib/libbooks.a"'
     || { cat sex-*/_build/test/test-suite.log; false; }
 
 notifications:
